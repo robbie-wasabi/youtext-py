@@ -4,7 +4,9 @@ import logging
 import tempfile
 import time
 from youtube_transcript_api import YouTubeTranscriptApi
-import openai
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 import tiktoken
 import sys
 
@@ -14,8 +16,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Set up OpenAI API key
-openai.api_key = os.environ.get("OPENAI_API_KEY")
+model = "gpt-4o"
+max_tokens = 4096
 
 
 def get_video_id(url):
@@ -41,10 +43,10 @@ def fetch_transcript(video_id):
 
 
 def get_tokenizer():
-    return tiktoken.encoding_for_model("gpt-4o")
+    return tiktoken.encoding_for_model(model)
 
 
-def chunk_text(text, max_tokens=3000):
+def chunk_text(text, max_tokens=max_tokens):
     logger.info(f"Chunking text into parts of max tokens: {max_tokens}")
     tokenizer = get_tokenizer()
     tokens = tokenizer.encode(text)
@@ -70,7 +72,6 @@ def generate_unique_filename(video_id, suffix):
 
 
 def summarize_text(text):
-    """Summarize text using OpenAI's gpt-4o model."""
     logger.info(f"Summarizing text of {len(get_tokenizer().encode(text))} tokens")
     try:
         chunks = chunk_text(text)
@@ -78,8 +79,8 @@ def summarize_text(text):
         for i, chunk in enumerate(chunks):
             chunk_tokens = len(get_tokenizer().encode(chunk))
             logger.info(f"Processing chunk {i+1}/{len(chunks)} ({chunk_tokens} tokens)")
-            response = openai.ChatCompletion.create(
-                model="gpt-4o",
+            response = client.chat.completions.create(
+                model=model,
                 messages=[
                     {
                         "role": "system",
@@ -90,9 +91,9 @@ def summarize_text(text):
                         "content": f"Please summarize the following text:\n\n{chunk}",
                     },
                 ],
-                max_tokens=4096,
+                max_tokens=max_tokens,
             )
-            summaries.append(response.choices[0].message["content"].strip())
+            summaries.append(response.choices[0].message.content.strip())
 
         logger.info(f"Summarized {len(chunks)} chunks")
         if len(summaries) > 1:
@@ -154,6 +155,38 @@ def get_video_id(input_string):
         return input_string
 
 
+def create_outline(text):
+    """Create a comprehensive outline from the transcript text."""
+    logger.info("Generating detailed outline from transcript")
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Create a comprehensive outline that can serve as a standalone reference. Include:
+                    - Main topics with timestamps (if available)
+                    - Key points and arguments
+                    - Important examples and evidence
+                    - Notable quotes or statements
+                    - Definitions of technical terms
+                    - Conclusions and takeaways
+                    
+                    The outline should be detailed enough that someone wouldn't need to watch the video or read the transcript to understand the content fully.""",
+                },
+                {
+                    "role": "user",
+                    "content": f"Please create a detailed outline for this transcript:\n\n{text}",
+                },
+            ],
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Error creating outline: {str(e)}")
+        raise Exception(f"Error creating outline: {str(e)}")
+
+
 def cli():
     parser = argparse.ArgumentParser(
         description="YouTube video transcript and summary tool"
@@ -169,6 +202,12 @@ def cli():
         "script", help="Fetch transcript of YouTube video"
     )
     script_parser.add_argument("input", help="YouTube video URL or ID")
+
+    # Outline command
+    outline_parser = subparsers.add_parser(
+        "outline", help="Generate outline of YouTube video content"
+    )
+    outline_parser.add_argument("input", help="YouTube video URL or ID")
 
     args = parser.parse_args()
 
@@ -188,6 +227,17 @@ def cli():
         with open(transcript_path, "w", encoding="utf-8") as f:
             f.write(transcript)
         print(f"Transcript saved to: {transcript_path}")
+    elif args.command == "outline":
+        video_id = get_video_id(args.input)
+        transcript = fetch_transcript(video_id)
+        outline = create_outline(transcript)
+        print(f"Outline:\n{outline}")
+
+        outline_filename = generate_unique_filename(video_id, "_outline.txt")
+        outline_path = os.path.join(tempfile.gettempdir(), outline_filename)
+        with open(outline_path, "w", encoding="utf-8") as f:
+            f.write(outline)
+        print(f"Outline saved to: {outline_path}")
     else:
         parser.print_help()
         sys.exit(1)

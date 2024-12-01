@@ -7,10 +7,11 @@ setup(
     install_requires=[
         "youtube_transcript_api",
         "openai",
+        "tiktoken",
     ],
     entry_points={
         "console_scripts": [
-            "youtext=script:main",
+            "youtext=youtext.main:cli",
         ],
     },
 )

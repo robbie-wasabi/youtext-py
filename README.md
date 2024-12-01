@@ -19,8 +19,10 @@ Choose one of the following installation methods:
 1. Clone this repository
 2. Install the package:
    ```
-   pip install .
+   pip install -e .
    ```
+   ```
+   pip uninstall youtext
 
 ### Method 2: Manual Installation
 
