@@ -37,7 +37,8 @@ Choose one of the following installation methods:
    ```
 4. Create a symbolic link:
    ```
-   ln -s /full/path/to/script.py /usr/local/bin/youtext
+   ln -sf $(pwd)/youtext/main.py /usr/local/bin/youtext
+   chmod +x /usr/local/bin/youtext
    ```
 
 ### For both methods:
