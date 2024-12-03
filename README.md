@@ -1,4 +1,4 @@
-# YouTubeTranscriptSummarizer
+# Youtext
 
 YouTubeTranscriptSummarizer is a Python tool that fetches transcripts from YouTube videos and generates summaries using OpenAI's GPT-4o model.
 
